@@ -26,6 +26,8 @@ TreeNode * newExpNode(ExpKind);
 /* Function copyString allocates and makes a new
  * copy of an existing string
  */
+
+TreeNode * newDeclNode(DeclKind);
 char * copyString( char * );
 
 /* procedure printTree prints a syntax tree to the 
