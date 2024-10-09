@@ -206,7 +206,8 @@ TreeNode * factor(void)
  * constructed syntax tree
  */
 TreeNode * parse(void)
-{ TreeNode * t;
+{ 
+  TreeNode * t;
   token = getToken();
   t = stmt_sequence();
   if (token!=ENDFILE)

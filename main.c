@@ -37,7 +37,7 @@ FILE * listing;
 FILE * code;
 
 /* allocate and set tracing flags */
-int EchoSource = FALSE;
+int EchoSource = TRUE;
 int TraceScan = FALSE;
 int TraceParse = TRUE;
 int TraceAnalyze = FALSE;
@@ -65,7 +65,9 @@ int main( int argc, char * argv[] )
 #if NO_PARSE
   while (getToken()!=ENDFILE);
 #else
+  fprintf(listing,"inelse\n");
   syntaxTree = parse();
+  fprintf(listing,"finishparse");
   if (TraceParse) {
     fprintf(listing,"\nSyntax tree:\n");
     printTree(syntaxTree);

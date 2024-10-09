@@ -6,7 +6,7 @@
 /****************************************************/
 %{
 #define YYPARSER /* distinguishes Yacc output from other code files */
-
+#define YYDEBUG 1
 #include "globals.h"
 #include "util.h"
 #include "scan.h"
@@ -14,23 +14,29 @@
 
 #define YYSTYPE TreeNode *
 static char * savedName; /* for use in assignments */
+static int savedNumber; /* for use in assignments */
 static int savedLineNo;  /* ditto */
 static TreeNode * savedTree; /* stores syntax tree for later return */
 static int yylex(void); // added 11/2/11 to ensure no conflict with lex
 
 %}
-// %nonassoc ELSE
-// %left MINUS PLUS
-// %right EXPONENT
-%token IF ELSE WHILE RETURN INT VOID
+%nonassoc ELSE
+%token IF WHILE RETURN INT VOID
 %token ID NUM 
-%token ASSIGN EQ NE LT LE GT GE PLUS MINUS TIMES OVER LPAREN RPAREN LBRACE RBRACE LCURLY RCURLY SEMI COMMA
+%token EQ NE LT LE GT GE 
+%token LPAREN RPAREN LBRACE RBRACE LCURLY RCURLY SEMI
+%left MINUS PLUS
+%left TIMES OVER COMMA
+%right EXPONENT ASSIGN
 %token ENDFILE ERROR 
 
 %% /* Grammar for CMINUS */
 
 program     : declaration_list
-                 { savedTree = $1;} 
+                 { 
+                    savedTree = $1;
+                    
+                 } 
             ;
 declaration_list : declaration_list declaration 
                   {
@@ -44,40 +50,56 @@ declaration_list : declaration_list declaration
                       $$ = $2;
                     }
                   }
-                  | declaration {$$ = $1;}
-                  ;
+                | declaration {$$ = $1;}
+                ;
 declaration : var_declaration{$$=$1;}
             | fun_declaration{$$=$1;}
             ;
-var_declaration : type_specifier ID SEMI 
+id          : ID 
+             {
+                savedName = copyString(tokenString);
+                savedLineNo = lineno;
+             }
+            ;
+num         : NUM
+            {
+                savedNumber = atoi(tokenString);
+                savedLineNo = lineno;
+            }
+            ;
+var_declaration : type_specifier id SEMI 
                   {
                     $$ = newDeclNode(VarDeclK);
-                    $$->attr.name = copyString(tokenString);
+                    $$->attr.name = savedName;
+                    $$->lineno = $2->lineno;
                     $$->type = $1->type;
                   }
-                | type_specifier ID LBRACE NUM RBRACE SEMI
+                | type_specifier id LBRACE num RBRACE SEMI
                   {
                     $$=newDeclNode(VarDeclK);
-                    $$->attr.name = copyString(tokenString);
+                    $$->child[0] = $4;
+                    $$->lineno = $2->lineno;
+                    $$->attr.name = savedName;
                     $$->type = ($1->type==Int) ? IntArr : VoidArr;
-                    $$->attr.val = $4->attr.val;
+                    $$->attr.val = savedNumber;
                   }
                 ;
 type_specifier  : INT 
                   {
-                    $$ = newExpNode(ConstK);  
+                    $$ = newExpNode(TypeK);  
                     $$->type=Int;
                   }
                 | VOID
                   {
-                    $$ = newExpNode(ConstK);  
+                    $$ = newExpNode(TypeK);  
                     $$->type=Void;
                   }
                 ;
-fun_declaration : type_specifier ID LPAREN params RPAREN compound_stmt
+fun_declaration : type_specifier id LPAREN params RPAREN compound_stmt
                   {
                     $$=newDeclNode(FunDeclK);
-                    $$->attr.name = copyString(tokenString);
+                    $$->attr.name = savedName;
+                    $$->lineno = $2->lineno;
                     $$->type = $1->type;
                     $$->child[0]=$4;
                     $$->child[1]=$6;
@@ -104,16 +126,16 @@ param_list  : param_list COMMA param
               }
             ;
 param
-    : type_specifier ID
+    : type_specifier id
         {
             $$ = newDeclNode(ParamK);
-            $$->attr.name = copyString(tokenString);
+            $$->attr.name = savedName;
             $$->type = $1->type;
         }
-    | type_specifier ID LBRACE RBRACE
+    | type_specifier id LBRACE RBRACE
         {
             $$ = newDeclNode(ParamK);
-            $$->attr.name = copyString(tokenString);
+            $$->attr.name = savedName;
             $$->type = ($1->type == Int) ? IntArr : VoidArr;
         }
     ;
@@ -122,6 +144,7 @@ compound_stmt
     : LCURLY local_declarations statement_list RCURLY
         {
             $$ = newStmtNode(CompoundK);
+            $$->lineno = lineno;
             $$->child[0] = $2;  
             $$->child[1] = $3;  
         }
@@ -180,12 +203,18 @@ expression_stmt
     ;
 
 selection_stmt
-    : IF LPAREN expression RPAREN statement ELSE statement
+    : IF LPAREN expression RPAREN statement 
         {
             $$ = newStmtNode(IfK);
             $$->child[0] = $3;  
             $$->child[1] = $5; 
-            $$->child[2] = $7;  
+        }
+    | IF LPAREN expression RPAREN statement ELSE statement
+        {
+            $$ = newStmtNode(IfK);
+            $$->child[0] = $3;  
+            $$->child[1] = $5; 
+            $$->child[2] = $7;
         }
     ;
 
@@ -200,7 +229,10 @@ iteration_stmt
 
 return_stmt
     : RETURN SEMI
-        { $$ = newStmtNode(ReturnK); }
+        { 
+            $$ = newStmtNode(ReturnK); 
+            $$->type = Void;
+        }
     | RETURN expression SEMI
         {
             $$ = newStmtNode(ReturnK);
@@ -220,15 +252,15 @@ expression
     ;
 
 var
-    : ID
+    : id
         {
             $$ = newExpNode(IdK);
-            $$->attr.name = copyString(tokenString);
+            $$->attr.name = savedName;
         }
-    | ID LBRACE expression RBRACE
+    | id LBRACE expression RBRACE
         {
             $$ = newExpNode(IdK);
-            $$->attr.name = copyString(tokenString);
+            $$->attr.name = savedName;
             $$->child[0] = $3;  
         }
     ;
@@ -335,7 +367,7 @@ factor
         { $$ = $1; }
     | call
         { $$ = $1; }
-    | NUM
+    | num
         {
             $$ = newExpNode(ConstK);
             $$->attr.val = atoi(tokenString);
@@ -343,10 +375,10 @@ factor
     ;
 
 call
-    : ID LPAREN args RPAREN
+    : id LPAREN args RPAREN
         {
             $$ = newExpNode(CallK);
-            $$->attr.name = copyString(tokenString);
+            $$->attr.name = savedName;
             $$->child[0] = $3;  
         }
     ;
@@ -389,10 +421,14 @@ int yyerror(char * message)
  * compatible with ealier versions of the TINY scanner
  */
 static int yylex(void)
-{ return getToken(); }
+{ 
+    return getToken(); 
+}
 
 TreeNode * parse(void)
-{ yyparse();
+{ 
+    fprintf(listing,"inparser");
+    yyparse();
   return savedTree;
 }
 

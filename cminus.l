@@ -26,7 +26,7 @@ whitespace  [ \t]+
 "else"          {return ELSE;}
 "while"         {return WHILE;}
 "return"        {return RETURN;}
-"INT"           {return INT;}
+"int"           {return INT;}
 "void"          {return VOID;}
 "="             {return ASSIGN;}
 "=="            {return EQ;}
