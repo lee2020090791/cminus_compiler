@@ -6,7 +6,7 @@
 /****************************************************/
 %{
 #define YYPARSER /* distinguishes Yacc output from other code files */
-#define YYDEBUG 1
+
 #include "globals.h"
 #include "util.h"
 #include "scan.h"
@@ -20,15 +20,13 @@ static TreeNode * savedTree; /* stores syntax tree for later return */
 static int yylex(void); // added 11/2/11 to ensure no conflict with lex
 
 %}
-%nonassoc ELSE
-%token IF WHILE RETURN INT VOID
-%token ID NUM 
-%token EQ NE LT LE GT GE 
-%token LPAREN RPAREN LBRACE RBRACE LCURLY RCURLY SEMI
-%left MINUS PLUS
-%left TIMES OVER COMMA
-%right EXPONENT ASSIGN
-%token ENDFILE ERROR 
+
+
+%token ELSE IF INT RETURN VOID WHILE
+%token ID NUM
+%token PLUS MINUS TIMES OVER LT LE GT GE EQ NE ASSIGN SEMI COMMA
+%token LPAREN RPAREN LBRACE RBRACE LCURLY RCURLY
+%token ERROR
 
 %% /* Grammar for CMINUS */
 
@@ -55,60 +53,66 @@ declaration_list : declaration_list declaration
 declaration : var_declaration{$$=$1;}
             | fun_declaration{$$=$1;}
             ;
-id          : ID 
+identifier  : ID 
              {
                 savedName = copyString(tokenString);
                 savedLineNo = lineno;
              }
             ;
-num         : NUM
+number      : NUM
             {
                 savedNumber = atoi(tokenString);
                 savedLineNo = lineno;
             }
             ;
-var_declaration : type_specifier id SEMI 
+var_declaration : type_specifier identifier SEMI 
                   {
                     $$ = newDeclNode(VarDeclK);
                     $$->attr.name = savedName;
-                    $$->lineno = $2->lineno;
-                    $$->type = $1->type;
+                    $$->lineno = lineno;
+                    $$->child[0] = $1;
                   }
-                | type_specifier id LBRACE num RBRACE SEMI
+                | type_specifier identifier LBRACE number RBRACE SEMI
                   {
                     $$=newDeclNode(VarDeclK);
-                    $$->child[0] = $4;
-                    $$->lineno = $2->lineno;
+                    $$->child[1] = $4;
+                    $$->lineno = lineno;
                     $$->attr.name = savedName;
-                    $$->type = ($1->type==Int) ? IntArr : VoidArr;
+                    $$->child[0] = $1;
                     $$->attr.val = savedNumber;
                   }
                 ;
 type_specifier  : INT 
                   {
-                    $$ = newExpNode(TypeK);  
+                    $$ = newTypeNode(TypeNameK);  
                     $$->type=Int;
                   }
                 | VOID
                   {
-                    $$ = newExpNode(TypeK);  
+                    $$ = newTypeNode(TypeNameK);  
                     $$->type=Void;
                   }
                 ;
-fun_declaration : type_specifier id LPAREN params RPAREN compound_stmt
-                  {
-                    $$=newDeclNode(FunDeclK);
-                    $$->attr.name = savedName;
-                    $$->lineno = $2->lineno;
-                    $$->type = $1->type;
-                    $$->child[0]=$4;
-                    $$->child[1]=$6;
-                  }
+fun_declaration : type_specifier identifier {
+                        $$=newDeclNode(FunDeclK);
+                        $$->attr.name = savedName;
+                        $$->lineno = lineno;
+                    }
+                  LPAREN params RPAREN compound_stmt
+                    {
+                        $$=$3;
+                        $$->child[0] =$1;
+                        $$->child[1]=$5;
+                        $$->child[2]=$7;
+                    }
                 ;
 params      : param_list 
                 {$$=$1;}
             | VOID
-              {$$=NULL;}
+              {
+                $$=newTypeNode(TypeNameK);
+                $$->type = Void;
+              }
             ;
 param_list  : param_list COMMA param
                 {
@@ -126,17 +130,17 @@ param_list  : param_list COMMA param
               }
             ;
 param
-    : type_specifier id
+    : type_specifier identifier
         {
-            $$ = newDeclNode(ParamK);
+            $$ = newParamNode(NonArrParamK);
             $$->attr.name = savedName;
-            $$->type = $1->type;
+            $$->child[0]=$1;
         }
-    | type_specifier id LBRACE RBRACE
+    | type_specifier identifier LBRACE RBRACE
         {
-            $$ = newDeclNode(ParamK);
+            $$ = newParamNode(ArrParamK);
             $$->attr.name = savedName;
-            $$->type = ($1->type == Int) ? IntArr : VoidArr;
+            $$->child[0]=$1;
         }
     ;
 
@@ -153,7 +157,7 @@ compound_stmt
 local_declarations
     : local_declarations var_declaration
         {
-            TreeNode *t = $1;
+            YYSTYPE t = $1;
             if (t != NULL) {
                 while (t->sibling != NULL) t = t->sibling;
                 t->sibling = $2;
@@ -169,7 +173,7 @@ local_declarations
 statement_list
     : statement_list statement
         {
-            TreeNode *t = $1;
+            YYSTYPE t = $1;
             if (t != NULL) {
                 while (t->sibling != NULL) t = t->sibling;
                 t->sibling = $2;
@@ -202,12 +206,41 @@ expression_stmt
         { $$ = NULL; }  
     ;
 
-selection_stmt
-    : IF LPAREN expression RPAREN statement 
+/* selection_stmt
+    : uif
+        {$$ = $1;}
+    | mif
+        {$$=$1;}
+mif     : IF LPAREN expression RPAREN mif ELSE mif
         {
             $$ = newStmtNode(IfK);
             $$->child[0] = $3;  
             $$->child[1] = $5; 
+            $$->child[2] = $7;
+        }
+        | statement
+            {$$ = $1;}
+uif     : IF LPAREN expression RPAREN statement
+        {
+            $$ = newStmtNode(IfK);
+            $$->child[0] = $3;
+            $$->child[1] = $5;
+        }
+        | IF LPAREN expression RPAREN mif ELSE uif
+        {
+            $$ = newStmtNode(IfK);
+            $$->child[0] = $3;  
+            $$->child[1] = $5; 
+            $$->child[2] = $7;
+        }
+    ; */
+selection_stmt
+    : IF LPAREN expression RPAREN statement
+        {
+            $$ = newStmtNode(IfK);
+            $$->child[0] = $3;
+            $$->child[1] = $5;
+            $$->child[2] = NULL;
         }
     | IF LPAREN expression RPAREN statement ELSE statement
         {
@@ -231,7 +264,7 @@ return_stmt
     : RETURN SEMI
         { 
             $$ = newStmtNode(ReturnK); 
-            $$->type = Void;
+            $$->child[0] = NULL;
         }
     | RETURN expression SEMI
         {
@@ -252,12 +285,12 @@ expression
     ;
 
 var
-    : id
+    : identifier
         {
             $$ = newExpNode(IdK);
             $$->attr.name = savedName;
         }
-    | id LBRACE expression RBRACE
+    | identifier LBRACE expression RBRACE
         {
             $$ = newExpNode(IdK);
             $$->attr.name = savedName;
@@ -367,15 +400,15 @@ factor
         { $$ = $1; }
     | call
         { $$ = $1; }
-    | num
+    | number
         {
             $$ = newExpNode(ConstK);
-            $$->attr.val = atoi(tokenString);
+            $$->attr.val = savedNumber;
         }
     ;
 
 call
-    : id LPAREN args RPAREN
+    : identifier LPAREN args RPAREN
         {
             $$ = newExpNode(CallK);
             $$->attr.name = savedName;
@@ -393,7 +426,7 @@ args
 arg_list
     : arg_list COMMA expression
         {
-            TreeNode *t = $1;
+            YYSTYPE t = $1;
             if (t != NULL) {
                 while (t->sibling != NULL) t = t->sibling;
                 t->sibling = $3;
@@ -427,7 +460,6 @@ static int yylex(void)
 
 TreeNode * parse(void)
 { 
-    fprintf(listing,"inparser");
     yyparse();
   return savedTree;
 }

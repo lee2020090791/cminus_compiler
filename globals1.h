@@ -45,12 +45,12 @@
 #endif
 
 /* MAXRESERVED = the number of reserved words */
-#define MAXRESERVED 8
+#define MAXRESERVED 6
 
 /* Yacc/Bison generates its own integer values
  * for tokens
  */
-typedef int TokenType; 
+typedef int TokenType;
 
 extern FILE* source; /* source code text file */
 extern FILE* listing; /* listing output text file */
@@ -63,32 +63,42 @@ extern int lineno; /* source line number for listing */
 /**************************************************/
 
 typedef enum {StmtK,ExpK,DeclK,ParamK,TypeK} NodeKind;
-typedef enum {IfK,CompoundK,WhileK,ReturnK} StmtKind;
-typedef enum {OpK,ConstK,IdK,AssignK,CallK} ExpKind;
-typedef enum {VarDeclK,FunDeclK} DeclKind;
+typedef enum {CompK,IfK,IterK,RetK} StmtKind;
+typedef enum {AssignK,OpK,ConstK,IdK,ArrIdK,CallK} ExpKind;
+typedef enum {FuncK,VarK,ArrVarK} DeclKind;
 typedef enum {ArrParamK,NonArrParamK} ParamKind;
 typedef enum {TypeNameK} TypeKind;
 
+/* ArrayAttr is used for attributes for array variables */
+typedef struct arrayAttr {
+    TokenType type;
+    char * name;
+    int size;
+} ArrayAttr;
+
 /* ExpType is used for type checking */
-typedef enum {Void,Int,VoidArr,IntArr} ExpType;
+typedef enum {Void,Integer,Boolean, IntegerArray} ExpType;
 
 #define MAXCHILDREN 3
+
+struct ScopeRec;
 
 typedef struct treeNode
    { struct treeNode * child[MAXCHILDREN];
      struct treeNode * sibling;
      int lineno;
      NodeKind nodekind;
-     union { StmtKind stmt; 
+     union { StmtKind stmt;
              ExpKind exp;
              DeclKind decl;
              ParamKind param;
-             TypeKind type;
-            } kind;
+             TypeKind type; } kind;
      union { TokenType op;
              TokenType type;
              int val;
-             char * name; } attr;
+             char * name;
+             ArrayAttr arr;
+             struct ScopeRec * scope; } attr;
      ExpType type; /* for type checking of exps */
    } TreeNode;
 
@@ -125,6 +135,5 @@ extern int TraceAnalyze;
 extern int TraceCode;
 
 /* Error = TRUE prevents further passes if an error occurs */
-extern int Error; 
-
+extern int Error;
 #endif

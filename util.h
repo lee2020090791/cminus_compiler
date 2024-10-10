@@ -28,6 +28,11 @@ TreeNode * newExpNode(ExpKind);
  */
 
 TreeNode * newDeclNode(DeclKind);
+
+TreeNode * newParamNode(ParamKind);
+
+TreeNode * newTypeNode(TypeKind);
+
 char * copyString( char * );
 
 /* procedure printTree prints a syntax tree to the 
