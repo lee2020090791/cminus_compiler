@@ -62,15 +62,14 @@ extern int lineno; /* source line number for listing */
 /***********   Syntax tree for parsing ************/
 /**************************************************/
 
-typedef enum {StmtK,ExpK,DeclK,ParamK,TypeK} NodeKind;
-typedef enum {IfK,CompoundK,WhileK,ReturnK} StmtKind;
-typedef enum {OpK,ConstK,IdK,AssignK,CallK} ExpKind;
+typedef enum {StmtK,ExpK,DeclK} NodeKind;
+typedef enum {IfK,WhileK,ReturnK,CompoundK} StmtKind;
+// typedef enum {MIfK,UIfK,WhileK,ReturnK,CompoundK} StmtKind;
+typedef enum {OpK,ConstK,IdK,AssignK,CallK,TypeK,ParamK} ExpKind;
 typedef enum {VarDeclK,FunDeclK} DeclKind;
-typedef enum {ArrParamK,NonArrParamK} ParamKind;
-typedef enum {TypeNameK} TypeKind;
 
 /* ExpType is used for type checking */
-typedef enum {Void,Int,VoidArr,IntArr} ExpType;
+typedef enum {Void,Integer,VoidArr,IntArr} ExpType;
 
 #define MAXCHILDREN 3
 
@@ -79,14 +78,8 @@ typedef struct treeNode
      struct treeNode * sibling;
      int lineno;
      NodeKind nodekind;
-     union { StmtKind stmt; 
-             ExpKind exp;
-             DeclKind decl;
-             ParamKind param;
-             TypeKind type;
-            } kind;
+     union { StmtKind stmt; ExpKind exp; DeclKind decl;} kind;
      union { TokenType op;
-             TokenType type;
              int val;
              char * name; } attr;
      ExpType type; /* for type checking of exps */
@@ -126,5 +119,4 @@ extern int TraceCode;
 
 /* Error = TRUE prevents further passes if an error occurs */
 extern int Error; 
-
 #endif
