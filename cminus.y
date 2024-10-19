@@ -13,17 +13,20 @@
 #include "parse.h"
 
 #define YYSTYPE TreeNode *
-static char * savedName; /* for use in assignments */
-static int savedLineNo;  /* ditto */
+// static char * savedName; /* for use in assignments */
+// static int savedLineNo;  /* ditto */
 static TreeNode * savedTree; /* stores syntax tree for later return */
 static int yylex(void); // added 11/2/11 to ensure no conflict with lex
 
 %}
-
-%token IF ELSE WHILE RETURN INT VOID 
+%nonassoc LOWER_THAN_ELSE
+%nonassoc ELSE
+%token IF WHILE RETURN INT VOID 
 %token ID NUM 
-%token ASSIGN EQ NE LT LE GT GE PLUS MINUS TIMES OVER LPAREN RPAREN LBRACE RBRACE LCURLY RCURLY SEMI COMMA
-%token ERROR 
+%token ASSIGN EQ NE LT LE GT GE LPAREN RPAREN LBRACE RBRACE LCURLY RCURLY SEMI COMMA
+%left MINUS PLUS
+%right TIMES OVER
+%token ERROR
 
 %% /* Grammar for TINY */
 
@@ -168,44 +171,27 @@ statement_list : statement_list statement
                | 
                 {$$=NULL;}
                ;
-statement   : expression_stmt {$$=$1;}
+statement   : selection_stmt {$$=$1;}
+            | expression_stmt {$$=$1;}
             | compound_stmt {$$=$1;}
-            | selection_stmt {$$=$1;}
-            | iteration_stmt {$$=$1;}
+            | iteration_stmt {$$=$1;} 
             | return_stmt {$$=$1;}
             ;
 expression_stmt : expression SEMI {$$=$1;}
                 | SEMI {$$=NULL;}
                 ;
-selection_stmt  : IF LPAREN expression RPAREN statement
-                  {
-                    $$=newStmtNode(IfK);
-                    $$->child[0]=$3;
-                    $$->child[1]=$5;
-                    $$->child[2]=NULL;
-                  }
-                | IF LPAREN expression RPAREN statement ELSE statement
-                  {
-                    $$=newStmtNode(IfK);
-                    $$->child[0]=$3;
-                    $$->child[1]=$5;
-                    $$->child[2]=$7;
-                  }
-                ;
+
 /* selection_stmt : MIF {$$=$1;}
                | UIF {$$=$1;}
-               ;
-MIF     : IF LPAREN expression RPAREN MIF ELSE MIF
+               ;  */
+/* MIF     : IF LPAREN expression RPAREN MIF ELSE MIF
           {
             $$=newStmtNode(MIfK);
             $$->child[0]=$3;
             $$->child[1]=$5;
             $$->child[2]=$7;
           }
-        | statement
-          {
-            $$=$1;
-          }
+        | 
         ;
 UIF     : IF LPAREN expression RPAREN statement
           {
@@ -221,13 +207,28 @@ UIF     : IF LPAREN expression RPAREN statement
             $$->child[1]=$5;
             $$->child[2]=$7;
           } */
+selection_stmt  : IF LPAREN expression RPAREN statement %prec LOWER_THAN_ELSE
+                  {
+                    $$=newStmtNode(IfK);
+                    $$->child[0]=$3;
+                    $$->child[1]=$5;
+                    $$->child[2]=NULL;
+                  }
+                | IF LPAREN expression RPAREN statement ELSE statement
+                  {
+                    $$=newStmtNode(IfK);
+                    $$->child[0]=$3;
+                    $$->child[1]=$5;
+                    $$->child[2]=$7;
+                  }
+                ; 
 iteration_stmt : WHILE LPAREN expression RPAREN statement
                 {
                   $$=newStmtNode(WhileK);
                   $$->child[0]=$3;
                   $$->child[1]=$5;
                 }
-               ;
+               ; 
 return_stmt   : RETURN SEMI
                 {
                   $$=newStmtNode(ReturnK);
