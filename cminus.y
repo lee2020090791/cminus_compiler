@@ -245,6 +245,7 @@ expression  : var ASSIGN expression
                 $$=newExpNode(AssignK);
                 $$->child[0]=$1;
                 $$->child[1]=$3;
+                $$->type = $$->child[0]->type;
               }
             | simple_expression
               {$$=$1;}
@@ -252,12 +253,14 @@ var         : identifier
               {
                 $$=newExpNode(IdK);
                 $$->attr.name = $1->attr.name;
+                $$->type = Integer;
               }
             | identifier LBRACE expression RBRACE
               {
                 $$=newExpNode(IdK);
                 $$->attr.name=$1->attr.name;
                 $$->child[0]=$3;
+                $$->type = IntArr;
               }
 simple_expression
     : additive_expression relop additive_expression

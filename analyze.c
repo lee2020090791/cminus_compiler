@@ -9,15 +9,32 @@
 #include "globals.h"
 #include "symtab.h"
 #include "analyze.h"
-
 /* counter for variable memory locations */
-static int location = 0;
+// static int location = 0;
+// change to Scope->location
 
 /* Procedure traverse is a generic recursive 
  * syntax tree traversal routine:
  * it applies preProc in preorder and postProc 
  * in postorder to tree pointed to by t
  */
+int globalIndex;
+
+typedef enum {
+    Error_UndeclaredFunction,
+    Error_UndeclaredVariable,
+    Error_VoidVariable,
+    Error_InvalidArrayIndexNonInteger,
+    Error_InvalidArrayIndexOnNonArray,
+    Error_InvalidFunctionCall,
+    Error_InvalidReturn,
+    Error_InvalidAssignment,
+    Error_InvalidOperation,
+    Error_InvalidCondition,
+    Error_Redefined
+} ErrorType;
+static void endScope(TreeNode *t);
+static void typeError(ErrorType errorType, TreeNode *t);
 static void traverse( TreeNode * t,
                void (* preProc) (TreeNode *),
                void (* postProc) (TreeNode *) )
@@ -31,33 +48,49 @@ static void traverse( TreeNode * t,
     traverse(t->sibling,preProc,postProc);
   }
 }
+static void typeTraverse( TreeNode * t,
+               void (* preProc) (TreeNode *),
+               void (* postProc) (TreeNode *) )
+{ if (t != NULL)
+  { preProc(t);
+    { int i;
+      for (i=0; i < MAXCHILDREN; i++)
+        typeTraverse(t->child[i],preProc,postProc);
+    }
+    postProc(t);
+    endScope(t);
+    typeTraverse(t->sibling,preProc,postProc);
+  }
+}
 
 /* nullProc is a do-nothing procedure to 
  * generate preorder-only or postorder-only
  * traversals from traverse
  */
-static void nullProc(TreeNode * t)
-{ if (t==NULL) return;
-  else return;
+// static void nullProc(TreeNode * t)
+// { if (t==NULL) return;
+//   else return;
+// }
+
+static void endScope(TreeNode *t){
+  if(t->nodekind==StmtK&&t->kind.stmt==CompoundK){
+    ExitScope();
+  }
+  else if(t->nodekind==DeclK&&t->kind.decl==FunDeclK){
+    ExitScope();
+  }
 }
 
 /* Procedure insertNode inserts 
  * identifiers stored in t into 
  * the symbol table 
  */
-static void insertNode( TreeNode * t)
+static void insertNode( TreeNode * t) // StmtK modify + ExpK modify + Add DeclK 
 { switch (t->nodekind)
   { case StmtK:
       switch (t->kind.stmt)
-      { case AssignK:
-        case ReadK:
-          if (st_lookup(t->attr.name) == -1)
-          /* not yet in table, so treat as new definition */
-            st_insert(t->attr.name,t->lineno,location++);
-          else
-          /* already in table, so ignore location, 
-             add line number of use only */ 
-            st_insert(t->attr.name,t->lineno,0);
+      { case CompoundK:
+          InsertScope("compound");
           break;
         default:
           break;
@@ -66,20 +99,89 @@ static void insertNode( TreeNode * t)
     case ExpK:
       switch (t->kind.exp)
       { case IdK:
-          if (st_lookup(t->attr.name) == -1)
-          /* not yet in table, so treat as new definition */
-            st_insert(t->attr.name,t->lineno,location++);
-          else
-          /* already in table, so ignore location, 
-             add line number of use only */ 
-            st_insert(t->attr.name,t->lineno,0);
+          if (st_lookup(t->attr.name)==-1){
+            t->type = undetermined;
+            int temp = CurrentScopeLocation();
+            st_insert(t->attr.name,t->lineno,temp,t->type);
+            AddLocation();
+            // typeError(Error_UndeclaredVariable,t);
+          } else {
+            st_insert(t->attr.name,t->lineno,0,t->type);
+          }
           break;
+        case CallK:
+          if(st_lookup(t->attr.name)==-1){
+            t->type = undetermined;
+            t->child[0]->type = undetermined;
+            TreeNode * temp = t->child[0];
+            while(temp->sibling != NULL) {
+              temp->type = undetermined;
+              temp = temp->sibling;
+            }
+
+            // typeError(Error_UndeclaredFunction,t);
+          } else {
+            fprintf(listing,"******%d******",t->type);
+            st_insert(t->attr.name,t->lineno,0,t->type);
+          }
+          break;
+        case OpK:
+          t->type = Integer;
+          break;
+        case ConstK:
+          t->type = Integer;
+          break;
+        case AssignK:
+        case TypeK:
+        case ParamK:
         default:
           break;
       }
       break;
+    case DeclK:
+      switch (t->kind.decl)
+      {
+      case VarDeclK:
+        if(st_check(t->attr.name)){
+          typeError(Error_Redefined,t);
+        }
+        else {
+          int temp = CurrentScopeLocation();
+          st_insert(t->attr.name,t->lineno,temp,t->type);
+          AddLocation();
+        }
+        break;
+      case FunDeclK:
+        if(st_check(t->attr.name)){
+          typeError(Error_Redefined,t);
+        }
+        else {
+          int temp = CurrentScopeLocation();
+          st_insert(t->attr.name,t->lineno,temp,t->type);
+          AddLocation();
+          InsertScope(t->attr.name);
+          TreeNode *param = t->child[0];
+          int i = 0;
+          while(param!=NULL){
+            if(param->type == Void){
+              typeError(Error_VoidVariable,t);
+            } else {
+              int temp = CurrentScopeLocation();
+              st_insert_func(param->attr.name,param->lineno,temp,param->type,i++,t->type);
+              AddLocation();
+            }
+            param = param->sibling;
+          }
+
+        }
+        break;
+      default:
+        break;
+      }
+      break;
     default:
       break;
+    
   }
 }
 
@@ -87,38 +189,193 @@ static void insertNode( TreeNode * t)
  * table by preorder traversal of the syntax tree
  */
 void buildSymtab(TreeNode * syntaxTree)
-{ traverse(syntaxTree,insertNode,nullProc);
-  if (TraceAnalyze)
-  { fprintf(listing,"\nSymbol table:\n\n");
+{ 
+  InsertScope("global");
+  int temp = CurrentScopeLocation();
+  st_insert("input",0,temp,Integer);
+  AddLocation();
+  temp = CurrentScopeLocation();
+  st_insert("output",0,temp,Void);
+  AddLocation();
+
+  traverse(syntaxTree,insertNode,endScope);
+  ExitScope();
+
+  if(TraceAnalyze){
+    fprintf(listing,"\nSymbol Table:\n\n");
     printSymTab(listing);
   }
 }
 
-static void typeError(TreeNode * t, char * message)
-{ fprintf(listing,"Type error at line %d: %s\n",t->lineno,message);
-  Error = TRUE;
+static void typeError(ErrorType errorType, TreeNode *t) {
+    Error = TRUE;
+
+    switch (errorType) {
+        case Error_UndeclaredFunction:
+            fprintf(listing, "Error: undeclared function \"%s\" is called at line %d\n", t->attr.name, t->lineno);
+            break;
+        case Error_UndeclaredVariable:
+            fprintf(listing, "Error: undeclared variable \"%s\" is used at line %d\n", t->attr.name, t->lineno);
+            break;
+        case Error_VoidVariable:
+            fprintf(listing, "Error: The void-type variable is declared at line %d (name : \"%s\")\n", t->lineno, t->attr.name);
+            break;
+        case Error_InvalidArrayIndexNonInteger:
+            fprintf(listing, "Error: Invalid array indexing at line %d (name : \"%s\"). indicies should be integer\n", t->lineno, t->attr.name);
+            break;
+        case Error_InvalidArrayIndexOnNonArray:
+            fprintf(listing, "Error: Invalid array indexing at line %d (name : \"%s\"). indexing can only allowed for int[] variables\n", t->lineno, t->attr.name);
+            break;
+        case Error_InvalidFunctionCall:
+            fprintf(listing, "Error: Invalid function call at line %d (name : \"%s\")\n", t->lineno, t->attr.name);
+            break;
+        case Error_InvalidReturn:
+            fprintf(listing, "Error: Invalid return at line %d\n", t->lineno);
+            break;
+        case Error_InvalidAssignment:
+            fprintf(listing, "Error: Invalid assignment at line %d\n", t->lineno);
+            break;
+        case Error_InvalidOperation:
+            fprintf(listing, "Error: Invalid operation at line %d\n", t->lineno);
+            break;
+        case Error_InvalidCondition:
+            fprintf(listing, "Error: Invalid condition at line %d\n", t->lineno);
+            break;
+        case Error_Redefined:
+            fprintf(listing,"Error: Symbol \"%s\" is redefined at line %d\n",t->attr.name,t->lineno);
+            break;
+        default:
+            fprintf(listing, "Unknown error at line %d\n", t->lineno);
+            break;
+    }
 }
 
 /* Procedure checkNode performs
  * type checking at a single tree node
  */
-static void checkNode(TreeNode * t)
+
+static void enterScope(TreeNode * t){
+   switch (t->nodekind)
+  { case StmtK:
+      switch (t->kind.stmt)
+      { case CompoundK:
+          changeCurrentScope(globalIndex++);
+          fprintf(listing,"%d",globalIndex);
+          break;
+        default:
+          break;
+      }
+      break;
+    case ExpK:
+      switch (t->kind.exp)
+      { case IdK:
+          if (t->type == undetermined){
+            typeError(Error_UndeclaredVariable,t);
+          } 
+          break;
+        case CallK:
+          if(t->type == undetermined){
+            typeError(Error_UndeclaredFunction,t);
+          } 
+          break;
+        case OpK:
+        case ConstK:
+        case AssignK:
+        case TypeK:
+        case ParamK:
+        default:
+          break;
+      }
+      break;
+    case DeclK:
+      switch (t->kind.decl)
+      {
+      case VarDeclK:
+        break;
+      case FunDeclK:
+        changeCurrentScope(globalIndex++);
+        fprintf(listing,"%d",globalIndex);
+        TreeNode *param = t->child[0];
+        while(param!=NULL){
+          if(param->type == Void){
+            typeError(Error_VoidVariable,t);
+          } 
+          param = param->sibling;
+        }
+        break;
+      default:
+        break;
+      }
+      break;
+    default:
+      break;
+    
+  }
+}
+static void checkNode(TreeNode * t) // StmtK modify + ExpK modify + Add DeclK 
 { switch (t->nodekind)
-  { case ExpK:
+  { case DeclK:
+      switch (t->kind.decl)
+      {
+      case VarDeclK:
+        if(t->type == Void || t->type == VoidArr){
+          typeError(Error_VoidVariable,t);
+        }
+        break;
+      case FunDeclK:
+      default:
+        break;
+      }
+      break;
+    case ExpK:
       switch (t->kind.exp)
       { case OpK:
-          if ((t->child[0]->type != Integer) ||
-              (t->child[1]->type != Integer))
-            typeError(t,"Op applied to non-integer");
-          if ((t->attr.op == EQ) || (t->attr.op == LT))
-            t->type = Boolean;
-          else
-            t->type = Integer;
-          break;
-        case ConstK:
-        case IdK:
+          if(t->child[0] == NULL || t->child[1] == NULL) break;
+          if ((t->child[0]->type != Integer) || (t->child[1]->type != Integer))
+            typeError(Error_InvalidOperation,t);
+          // if ((t->attr.op == EQ) || (t->attr.op == NE)|| (t->attr.op == LT)|| (t->attr.op == LE)|| (t->attr.op == GE)|| (t->attr.op == GT))
+          //   t->type = Integer;
+          // else
           t->type = Integer;
           break;
+        case ConstK:
+          t->type = Integer;
+          break;
+        case IdK:
+          if(t->type==IntArr||t->type==VoidArr){
+            if(t->child[0] != NULL && t->child[0]->type != Integer){
+              typeError(Error_InvalidArrayIndexNonInteger, t);
+            } else {
+              if(t->child[0] != NULL && !isArr(t->attr.name)){
+                typeError(Error_InvalidArrayIndexOnNonArray,t);
+              }
+            }
+          }
+          break;
+        case AssignK:
+          if (t->child[0]->type != t->child[1]->type) {
+            fprintf(listing,"%d %d",t->child[0]->type,t->child[1]->type);
+            typeError(Error_InvalidAssignment, t);
+          }
+          break;
+        case CallK:
+          TreeNode *arg = t->child[0];
+          ExpType argArr[255]; // MaxParam 255
+          int i = 0;
+          while(arg!=NULL){
+            argArr[i]=arg->type;
+            i++;
+            arg = arg->sibling;
+          }
+          i = i-1;
+          if(strcmp(t->attr.name,"input") ||strcmp(t->attr.name,"output")){
+            if(arg!=NULL) typeError(Error_InvalidFunctionCall,t);
+          }
+          else if(!compareParamArg(t->attr.name,argArr,i)){
+            typeError(Error_InvalidFunctionCall,t);
+          }
+        case TypeK:
+        case ParamK:
         default:
           break;
       }
@@ -126,21 +383,22 @@ static void checkNode(TreeNode * t)
     case StmtK:
       switch (t->kind.stmt)
       { case IfK:
-          if (t->child[0]->type == Integer)
-            typeError(t->child[0],"if test is not Boolean");
-          break;
-        case AssignK:
+        case WhileK:
           if (t->child[0]->type != Integer)
-            typeError(t->child[0],"assignment of non-integer value");
+            typeError(Error_InvalidCondition,t);
           break;
-        case WriteK:
-          if (t->child[0]->type != Integer)
-            typeError(t->child[0],"write of non-integer value");
-          break;
-        case RepeatK:
-          if (t->child[1]->type == Integer)
-            typeError(t->child[1],"repeat test is not Boolean");
-          break;
+        case ReturnK:
+          if(t->child[0]==NULL){ // void return 
+            ExpType temp = ReturnType();
+            if(temp != Void) typeError(Error_InvalidReturn,t);
+          }
+          else if(t->child[0]->type != ReturnType()){
+            ExpType temp = ReturnType();
+            fprintf(listing,"   %s\n",t->child[0]->attr.name);
+            fprintf(listing,"retType %d %d\n",t->child[0]->type, temp);
+            typeError(Error_InvalidReturn,t);
+          }
+        case CompoundK:
         default:
           break;
       }
@@ -155,5 +413,6 @@ static void checkNode(TreeNode * t)
  * by a postorder syntax tree traversal
  */
 void typeCheck(TreeNode * syntaxTree)
-{ traverse(syntaxTree,nullProc,checkNode);
+{ typeTraverse(syntaxTree,enterScope,checkNode);
 }
+

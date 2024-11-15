@@ -13,6 +13,8 @@
  */
 void buildSymtab(TreeNode *);
 
+void printAllScopes(FILE *listing);
+
 /* Procedure typeCheck performs type checking 
  * by a postorder syntax tree traversal
  */

@@ -14,12 +14,37 @@
  * loc = memory location is inserted only the
  * first time, otherwise ignored
  */
-void st_insert( char * name, int lineno, int loc );
+// typedef enum {Void,Integer,VoidArr,IntArr,undetermined} ExpType;
+
+void st_insert( char * name, int lineno, int loc, ExpType type );
+
+void st_insert_func(char * name, int lineno, int loc, ExpType type, int i, ExpType retType);
 
 /* Function st_lookup returns the memory 
  * location of a variable or -1 if not found
  */
 int st_lookup ( char * name );
+
+void InsertScope( char * name);
+
+void ExitScope();
+
+int st_check(char * name);
+
+void printAllScopes(FILE * listing);
+
+int CurrentScopeLocation();
+
+void AddLocation();
+
+int compareParamArg(char *name,ExpType* argArr, int size);
+
+int isArr(char*name);
+
+void changeCurrentScope(int index);
+
+ExpType ReturnType();
+
 
 /* Procedure printSymTab prints a formatted 
  * listing of the symbol table contents 
@@ -27,4 +52,5 @@ int st_lookup ( char * name );
  */
 void printSymTab(FILE * listing);
 
+void printAllScopes(FILE *listing);
 #endif
