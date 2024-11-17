@@ -54,6 +54,7 @@ typedef struct BucketListRec
      int memloc ; /* memory location for variable */
      ExpType type;
      struct BucketListRec * next;
+     int isFunc;
    } * BucketList;
 
 /* the hash table */
@@ -134,7 +135,25 @@ void changeCurrentScope(int index){
  * first time, otherwise ignored
  */
 
-
+ExpType GlobalFuncReturnType(char * name){
+  Scope sc = globalScope;
+  int h = hash(name);
+  BucketList l =  sc->hashTable[h];
+  while ((l != NULL) && (strcmp(name,l->name) != 0))
+    l = l->next;
+  if(l!=NULL){
+    if(l->isFunc) return l->type;
+    else {
+      fprintf(listing,"in globalFuncReturnType, not a function");
+      return undetermined;
+    }
+  }
+  return undetermined;
+}
+void makeCurrentFuncScope(TreeNode* t){
+  currentScope->isFunc=1;
+  currentScope->retType = t->type;
+}
 ExpType ReturnType(){
   Scope sc = currentScope;
   while(sc != NULL && !sc->isFunc ){
@@ -148,12 +167,20 @@ ExpType ReturnType(){
   //     fprintf(listing,"func %s return type : integerx",sc->name);
   // }
   if(sc==NULL) {
-    // fprintf(listing,"cannotfindscope");
+    fprintf(listing,"cannotfindscope");
     return undetermined;
   }
   return sc->retType;
 }
+// i : param size 
 
+void st_isFunc(char * name){
+  int h = hash(name);
+  BucketList l =  currentScope->hashTable[h];
+  while ((l != NULL) && (strcmp(name,l->name) != 0))
+    l = l->next;
+  l->isFunc=1;
+}
 void st_insert_func(char *name, int lineno, int loc, ExpType type, int i, ExpType retType){
   int h = hash(name);
   BucketList l =  currentScope->hashTable[h];
@@ -170,6 +197,7 @@ void st_insert_func(char *name, int lineno, int loc, ExpType type, int i, ExpTyp
     currentScope->hashTable[h] = l; 
     l->type = type;
     // additional part
+    l->isFunc=1;
     currentScope->isFunc=1;
     currentScope->ParamArr[i] = type;
     currentScope->ParamSize = i;
@@ -199,6 +227,7 @@ void st_insert( char * name, int lineno, int loc, ExpType type )
     l->next = currentScope->hashTable[h]; //
     currentScope->hashTable[h] = l; 
     l->type = type;
+    l->isFunc=0;
     currentScope->isFunc=0;
     }
   else /* found in table, so just add line number */
@@ -238,11 +267,11 @@ int st_check( char * name ){
 }
 
 Scope st_findScope(char * name){
-  Scope sc = currentScope;
+  Scope sc = globalScope;
   while(sc!=NULL){
     if(strcmp(sc->name,name)==0)
       return sc;
-    sc = sc->parent ;
+    sc = sc->next ;
   }
   return NULL;
 }
@@ -255,28 +284,32 @@ int isArr(char *name){
     while ((l != NULL) && (strcmp(name,l->name) != 0))
       l = l->next;
     if (l != NULL){
-      if(l->type == Integer) return 1;
+      if(l->type == IntArr) return 1;
       else return 0;
     }
     sc = sc->parent ;
   }
-  return -1;
+  return 0;
 }
 
-int compareParamArg(char *name, ExpType* argArr, int size){ // return 1 if arg right / return 0 if arg wrong
+int compareParamArg(char *name, ExpType* argArr, int size){ // return 0 if arg right / return 1 if arg wrong
   Scope sc = st_findScope(name);
-  if(sc==NULL) fprintf(listing,"isNULL");
+  fprintf(listing,"Param %d\n",sc->ParamSize);
+  if(sc==NULL) {
+    fprintf(listing,"isNULL");
+    return 1;
+  }
   if(sc != NULL && sc->ParamSize != size){
     fprintf(listing,"size problem %d %d\n",size,sc->ParamSize);
-    return 0;
+    return 1;
   }
   for(int i=0;i<=size;i++){
     if(sc->ParamArr[i]!=argArr[i]) {
       fprintf(listing,"paramType %d\n",i);
-      return 0;
+      return 1;
     }
   }
-  return 1;
+  return 0;
 }
 
 void printAllScopes(FILE *listing) {

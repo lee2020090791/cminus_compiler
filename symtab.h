@@ -35,6 +35,12 @@ void printAllScopes(FILE * listing);
 
 int CurrentScopeLocation();
 
+ExpType GlobalFuncReturnType(char * name);
+
+void makeCurrentFuncScope(TreeNode *t);
+
+void st_isFunc(char * name);
+
 void AddLocation();
 
 int compareParamArg(char *name,ExpType* argArr, int size);

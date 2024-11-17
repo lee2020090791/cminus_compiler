@@ -52,12 +52,15 @@ static void typeTraverse( TreeNode * t,
                void (* preProc) (TreeNode *),
                void (* postProc) (TreeNode *) )
 { if (t != NULL)
-  { preProc(t);
+  { 
+    preProc(t);
+    // fprintf(listing,"pre %d %d\n",t->lineno,t->nodekind);
     { int i;
       for (i=0; i < MAXCHILDREN; i++)
         typeTraverse(t->child[i],preProc,postProc);
     }
     postProc(t);
+    // fprintf(listing,"post %d %d\n",t->lineno,t->nodekind);
     endScope(t);
     typeTraverse(t->sibling,preProc,postProc);
   }
@@ -111,6 +114,7 @@ static void insertNode( TreeNode * t) // StmtK modify + ExpK modify + Add DeclK
           break;
         case CallK:
           if(st_lookup(t->attr.name)==-1){
+            fprintf(listing, "in callk");
             t->type = undetermined;
             t->child[0]->type = undetermined;
             TreeNode * temp = t->child[0];
@@ -121,6 +125,7 @@ static void insertNode( TreeNode * t) // StmtK modify + ExpK modify + Add DeclK
 
             // typeError(Error_UndeclaredFunction,t);
           } else {
+            t->type = GlobalFuncReturnType(t->attr.name);
             fprintf(listing,"******%d******",t->type);
             st_insert(t->attr.name,t->lineno,0,t->type);
           }
@@ -158,8 +163,10 @@ static void insertNode( TreeNode * t) // StmtK modify + ExpK modify + Add DeclK
         else {
           int temp = CurrentScopeLocation();
           st_insert(t->attr.name,t->lineno,temp,t->type);
+          st_isFunc(t->attr.name);
           AddLocation();
           InsertScope(t->attr.name);
+          makeCurrentFuncScope(t);
           TreeNode *param = t->child[0];
           int i = 0;
           while(param!=NULL){
@@ -192,10 +199,10 @@ void buildSymtab(TreeNode * syntaxTree)
 { 
   InsertScope("global");
   int temp = CurrentScopeLocation();
-  st_insert("input",0,temp,Integer);
+  st_insert_func("input",0,temp,Integer,0,Integer);
   AddLocation();
   temp = CurrentScopeLocation();
-  st_insert("output",0,temp,Void);
+  st_insert_func("output",0,temp,Void,1,Void);
   AddLocation();
 
   traverse(syntaxTree,insertNode,endScope);
@@ -294,7 +301,7 @@ static void enterScope(TreeNode * t){
         break;
       case FunDeclK:
         changeCurrentScope(globalIndex++);
-        fprintf(listing,"%d",globalIndex);
+        fprintf(listing,"%d lineno: %d",globalIndex,t->lineno);
         TreeNode *param = t->child[0];
         while(param!=NULL){
           if(param->type == Void){
@@ -331,11 +338,12 @@ static void checkNode(TreeNode * t) // StmtK modify + ExpK modify + Add DeclK
       switch (t->kind.exp)
       { case OpK:
           if(t->child[0] == NULL || t->child[1] == NULL) break;
-          if ((t->child[0]->type != Integer) || (t->child[1]->type != Integer))
-            typeError(Error_InvalidOperation,t);
-          // if ((t->attr.op == EQ) || (t->attr.op == NE)|| (t->attr.op == LT)|| (t->attr.op == LE)|| (t->attr.op == GE)|| (t->attr.op == GT))
-          //   t->type = Integer;
-          // else
+          if ((t->child[0]->type)%2 != (t->child[1]->type)%2) {
+            if((t->child[0]->type !=4)||(t->child[1]->type!=4)){ // not allow for undetermined
+              fprintf(listing,"%d %d",t->child[0]->type,t->child[1]->type);
+              typeError(Error_InvalidOperation, t);
+            }
+          }
           t->type = Integer;
           break;
         case ConstK:
@@ -353,12 +361,16 @@ static void checkNode(TreeNode * t) // StmtK modify + ExpK modify + Add DeclK
           }
           break;
         case AssignK:
-          if (t->child[0]->type != t->child[1]->type) {
-            fprintf(listing,"%d %d",t->child[0]->type,t->child[1]->type);
-            typeError(Error_InvalidAssignment, t);
+          if ((t->child[0]->type)%2 != (t->child[1]->type)%2) {
+            if((t->child[0]->type !=4)||(t->child[1]->type!=4)){ // not allow for undetermined
+              fprintf(listing,"%d %d",t->child[0]->type,t->child[1]->type);
+              typeError(Error_InvalidAssignment, t);
+            }
           }
           break;
         case CallK:
+        {
+          fprintf(listing,"  %s Call Type: %d\n",t->attr.name,t->type);
           TreeNode *arg = t->child[0];
           ExpType argArr[255]; // MaxParam 255
           int i = 0;
@@ -368,12 +380,21 @@ static void checkNode(TreeNode * t) // StmtK modify + ExpK modify + Add DeclK
             arg = arg->sibling;
           }
           i = i-1;
-          if(strcmp(t->attr.name,"input") ||strcmp(t->attr.name,"output")){
-            if(arg!=NULL) typeError(Error_InvalidFunctionCall,t);
+          fprintf(listing,"arg %d",i);
+          
+          if(!strcmp(t->attr.name,"input")){
+            if(i!=-1) typeError(Error_InvalidFunctionCall,t);
           }
-          else if(!compareParamArg(t->attr.name,argArr,i)){
-            typeError(Error_InvalidFunctionCall,t);
+          else if(!strcmp(t->attr.name,"output")){
+            if(i!=0) typeError(Error_InvalidFunctionCall,t);
           }
+          else {
+            int temp = compareParamArg(t->attr.name,argArr,i);
+            if(temp)
+              typeError(Error_InvalidFunctionCall,t);
+          }
+        }
+          break;
         case TypeK:
         case ParamK:
         default:
@@ -398,6 +419,7 @@ static void checkNode(TreeNode * t) // StmtK modify + ExpK modify + Add DeclK
             fprintf(listing,"retType %d %d\n",t->child[0]->type, temp);
             typeError(Error_InvalidReturn,t);
           }
+          break;
         case CompoundK:
         default:
           break;

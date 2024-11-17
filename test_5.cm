@@ -1,0 +1,6 @@
+int temp(void)
+{
+    int i;
+    i = 1;
+    return i;
+}

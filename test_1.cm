@@ -8,6 +8,11 @@ int gcd (int u, int v)
 	/* u-u/v*v == u mod v */
 }
 
+int temp(void)
+{
+	return 1;
+}
+
 void main(void)
 {
 	int x; int y;
