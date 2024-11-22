@@ -276,6 +276,16 @@ Scope st_findScope(char * name){
   return NULL;
 }
 
+// Scope st_findScope(char *name){
+//   Scope sc = currentScope;
+//   while(sc!=NULL){
+//     if(strcmp(sc->name,name)==0)
+//       return sc;
+//     sc = sc->parent ;
+//   }
+//   return NULL;
+// }
+
 int isArr(char *name){
   int h = hash(name);
   Scope sc = currentScope;
