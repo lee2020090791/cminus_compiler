@@ -55,6 +55,9 @@ typedef struct BucketListRec
      ExpType type;
      struct BucketListRec * next;
      int isFunc;
+     int undeclareError;
+     int defineCount;
+     int MaxDefineCount;
    } * BucketList;
 
 /* the hash table */
@@ -126,8 +129,8 @@ Scope FindIndex2Scope(int index){
 
 void changeCurrentScope(int index){
   currentScope = FindIndex2Scope(index);
-  if(currentScope==NULL) fprintf(listing,"currentScope NULL\n");
-  else fprintf(listing,"change current scope to %d\n",currentScope->index);
+  // if(currentScope==NULL) fprintf(listing,"currentScope NULL\n");
+  // else fprintf(listing,"change current scope to %d\n",currentScope->index);
 }
 /* Procedure st_insert inserts line numbers and
  * memory locations into the symbol table
@@ -144,7 +147,7 @@ ExpType GlobalFuncReturnType(char * name){
   if(l!=NULL){
     if(l->isFunc) return l->type;
     else {
-      fprintf(listing,"in globalFuncReturnType, not a function");
+      // fprintf(listing,"in globalFuncReturnType, not a function");
       return undetermined;
     }
   }
@@ -167,12 +170,69 @@ ExpType ReturnType(){
   //     fprintf(listing,"func %s return type : integerx",sc->name);
   // }
   if(sc==NULL) {
-    fprintf(listing,"cannotfindscope");
+    // fprintf(listing,"cannotfindscope");
     return undetermined;
   }
   return sc->retType;
 }
-// i : param size 
+ExpType st_giveType(char *name) {
+  int h = hash(name);
+  Scope sc = currentScope;
+  while(sc!=NULL){
+    BucketList l =  sc->hashTable[h];
+    while ((l != NULL) && (strcmp(name,l->name) != 0))
+      l = l->next;
+    if (l != NULL) return l->type;
+    sc = sc->parent ;
+  }
+  return undetermined;
+}
+
+int undeclError(char *name){
+  int h = hash(name);
+  Scope sc = currentScope;
+  while(sc!=NULL){
+    // fprintf(listing,"%s",sc->name);
+    BucketList l =  sc->hashTable[h];
+    while ((l != NULL) && (strcmp(name,l->name) != 0))
+      l = l->next;
+    if (l != NULL) {
+      int temp = l->undeclareError;
+      // fprintf(listing,"%d %s\n",l->undeclareError,l->name);
+      l->undeclareError=1;
+      return temp;
+    }
+    sc = sc->parent ;
+  }
+  return 0;
+}
+
+void increaseDefineCount(char *name){
+  int h = hash(name);
+  BucketList l = currentScope->hashTable[h];
+  while ((l != NULL) && (strcmp(name,l->name) != 0))
+    l = l->next;
+  l->defineCount++;
+  l->MaxDefineCount++;
+}
+
+
+int isRedefined(char *name){
+  int h = hash(name);
+  BucketList l = currentScope->hashTable[h];
+  while ((l != NULL) && (strcmp(name,l->name) != 0))
+    l = l->next;
+  if(l->MaxDefineCount>1 && l->MaxDefineCount != l->defineCount) return 1;
+  if(l->MaxDefineCount>1){
+    if(l->MaxDefineCount != l->defineCount) return 1;
+    else {
+      l->defineCount--;
+      return 0;
+    }
+  }
+  return 0;
+
+}
 
 void st_isFunc(char * name){
   int h = hash(name);
@@ -181,6 +241,7 @@ void st_isFunc(char * name){
     l = l->next;
   l->isFunc=1;
 }
+// i : param size
 void st_insert_func(char *name, int lineno, int loc, ExpType type, int i, ExpType retType){
   int h = hash(name);
   BucketList l =  currentScope->hashTable[h];
@@ -229,6 +290,9 @@ void st_insert( char * name, int lineno, int loc, ExpType type )
     l->type = type;
     l->isFunc=0;
     currentScope->isFunc=0;
+    l->undeclareError=0;
+    l->defineCount=1;
+    l->MaxDefineCount=1;
     }
   else /* found in table, so just add line number */
   { LineList t = l->lines;
@@ -304,18 +368,18 @@ int isArr(char *name){
 
 int compareParamArg(char *name, ExpType* argArr, int size){ // return 0 if arg right / return 1 if arg wrong
   Scope sc = st_findScope(name);
-  fprintf(listing,"Param %d\n",sc->ParamSize);
+  // fprintf(listing,"Param %d\n",sc->ParamSize);
   if(sc==NULL) {
-    fprintf(listing,"isNULL");
+    // fprintf(listing,"isNULL");
     return 1;
   }
   if(sc != NULL && sc->ParamSize != size){
-    fprintf(listing,"size problem %d %d\n",size,sc->ParamSize);
+    // fprintf(listing,"size problem %d %d\n",size,sc->ParamSize);
     return 1;
   }
   for(int i=0;i<=size;i++){
     if(sc->ParamArr[i]!=argArr[i]) {
-      fprintf(listing,"paramType %d\n",i);
+      // fprintf(listing,"paramType %d\n",i);
       return 1;
     }
   }

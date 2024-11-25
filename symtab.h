@@ -39,6 +39,14 @@ ExpType GlobalFuncReturnType(char * name);
 
 void makeCurrentFuncScope(TreeNode *t);
 
+ExpType st_giveType(char *name);
+
+int undeclError(char *name);
+
+void increaseDefineCount(char *name);
+
+int isRedefined(char *name);
+
 void st_isFunc(char * name);
 
 void AddLocation();

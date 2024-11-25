@@ -1,6 +1,8 @@
-int temp(void)
+int main(void)
 {
-    int i;
-    i = 1;
-    return i;
+    x(1,2);
+
+    if(x()){}
+    
+    return 0;
 }

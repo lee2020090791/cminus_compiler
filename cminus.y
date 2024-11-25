@@ -210,9 +210,11 @@ UIF     : IF LPAREN expression RPAREN statement
 selection_stmt  : IF LPAREN expression RPAREN statement %prec LOWER_THAN_ELSE
                   {
                     $$=newStmtNode(IfK);
+                    
                     $$->child[0]=$3;
                     $$->child[1]=$5;
                     $$->child[2]=NULL;
+                    $$->lineno=$3->lineno;
                   }
                 | IF LPAREN expression RPAREN statement ELSE statement
                   {
@@ -220,6 +222,7 @@ selection_stmt  : IF LPAREN expression RPAREN statement %prec LOWER_THAN_ELSE
                     $$->child[0]=$3;
                     $$->child[1]=$5;
                     $$->child[2]=$7;
+                    $$->lineno=$3->lineno;
                   }
                 ; 
 iteration_stmt : WHILE LPAREN expression RPAREN statement
@@ -227,17 +230,20 @@ iteration_stmt : WHILE LPAREN expression RPAREN statement
                   $$=newStmtNode(WhileK);
                   $$->child[0]=$3;
                   $$->child[1]=$5;
+                  $$->lineno=$3->lineno;
                 }
                ; 
 return_stmt   : RETURN SEMI
                 {
                   $$=newStmtNode(ReturnK);
                   $$->child[0]= NULL;
+                  // $$->lineno=lineno;
                 }
               | RETURN expression SEMI
                 {
                   $$=newStmtNode(ReturnK);
                   $$->child[0]=$2;
+                  // $$->lineno=lineno;
                 }
               ;
 expression  : var ASSIGN expression
@@ -246,6 +252,7 @@ expression  : var ASSIGN expression
                 $$->child[0]=$1;
                 $$->child[1]=$3;
                 $$->type = $$->child[0]->type;
+                $$->lineno = $1->lineno;
               }
             | simple_expression
               {$$=$1;}
@@ -254,6 +261,7 @@ var         : identifier
                 $$=newExpNode(IdK);
                 $$->attr.name = $1->attr.name;
                 $$->type = Integer;
+                $$->lineno = $1->lineno;
               }
             | identifier LBRACE expression RBRACE
               {
@@ -261,6 +269,7 @@ var         : identifier
                 $$->attr.name=$1->attr.name;
                 $$->child[0]=$3;
                 $$->type = IntArr;
+                $$->lineno = $1->lineno;
               }
 simple_expression
     : additive_expression relop additive_expression
@@ -269,6 +278,7 @@ simple_expression
             $$->child[0] = $1;
             $$->attr.op = $2->attr.op;
             $$->child[1] = $3;
+            $$->lineno = $1->lineno;
         }
     | additive_expression
         { $$ = $1; }
@@ -314,9 +324,12 @@ additive_expression
             $$->child[0] = $1;
             $$->attr.op = $2->attr.op;
             $$->child[1] = $3;
+            $$->lineno = $1->lineno;
         }
     | term
-        { $$ = $1; }
+        { 
+          $$ = $1; 
+        }
     ;
 
 addop
@@ -339,6 +352,7 @@ term
             $$->child[0] = $1;
             $$->attr.op = $2->attr.op;
             $$->child[1] = $3;
+            $$->lineno = $1->lineno;
         }
     | factor
         { $$ = $1; }
