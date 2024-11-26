@@ -370,7 +370,7 @@ int compareParamArg(char *name, ExpType* argArr, int size){ // return 0 if arg r
   Scope sc = st_findScope(name);
   // fprintf(listing,"Param %d\n",sc->ParamSize);
   if(sc==NULL) {
-    // fprintf(listing,"isNULL");
+    //fprintf(listing,"isNULL");
     return 1;
   }
   if(sc != NULL && sc->ParamSize != size){
@@ -379,7 +379,7 @@ int compareParamArg(char *name, ExpType* argArr, int size){ // return 0 if arg r
   }
   for(int i=0;i<=size;i++){
     if(sc->ParamArr[i]!=argArr[i]) {
-      // fprintf(listing,"paramType %d\n",i);
+      fprintf(listing,"paramType %d\n",i);
       return 1;
     }
   }

@@ -135,7 +135,7 @@ static void insertNode( TreeNode * t) // StmtK modify + ExpK modify + Add DeclK
             int i=0;
             while(param!=NULL){
               if(param->type == Void){
-                typeError(Error_VoidVariable,t);
+                // typeError(Error_VoidVariable,t);
               } else {
                 int temp = CurrentScopeLocation();
                 st_insert_func("undetermined",param->lineno,temp,param->type,i++,t->type);
@@ -301,10 +301,7 @@ static void enterScope(TreeNode * t){
           } 
           break;
         case CallK:
-          if(t->type == undetermined){
-            if(!undeclError(t->attr.name))
-              typeError(Error_UndeclaredFunction,t);
-          } 
+          
           break;
         case OpK:
         case ConstK:
@@ -405,6 +402,7 @@ static void checkNode(TreeNode * t) // StmtK modify + ExpK modify + Add DeclK
           break;
         case CallK:
         {
+           
           // fprintf(listing,"  %s Call Type: %d\n",t->attr.name,t->type);
           TreeNode *arg = t->child[0];
           ExpType argArr[255]; // MaxParam 255
@@ -425,8 +423,19 @@ static void checkNode(TreeNode * t) // StmtK modify + ExpK modify + Add DeclK
           }
           else {
             int temp = compareParamArg(t->attr.name,argArr,i);
-            if(temp)
-              typeError(Error_InvalidFunctionCall,t);
+            if(t->type == undetermined){
+              if(!undeclError(t->attr.name))
+                typeError(Error_UndeclaredFunction,t);
+              else{
+                if(temp)
+                  typeError(Error_InvalidFunctionCall,t);
+              }
+            } else {
+              if(temp){
+                typeError(Error_InvalidFunctionCall,t);
+              }
+            }
+            
           }
         }
           break;
